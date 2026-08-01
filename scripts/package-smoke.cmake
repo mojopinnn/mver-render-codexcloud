@@ -1,0 +1,41 @@
+cmake_minimum_required(VERSION 3.24)
+if(NOT DEFINED ROOT)
+  message(FATAL_ERROR "Pass -DROOT=<unpacked install tree>")
+endif()
+file(REAL_PATH "${ROOT}" ROOT)
+set(ENV{QT_QPA_PLATFORM} minimal)
+
+function(run_checked exe)
+  execute_process(COMMAND "${exe}" ${ARGN} RESULT_VARIABLE rc
+                  OUTPUT_VARIABLE out ERROR_VARIABLE err TIMEOUT 20)
+  if(NOT rc EQUAL 0)
+    message(FATAL_ERROR "${exe} ${ARGN} failed (${rc})\n${out}\n${err}")
+  endif()
+endfunction()
+
+run_checked("${ROOT}/bin/mver-cli${CMAKE_EXECUTABLE_SUFFIX}" --help)
+run_checked("${ROOT}/bin/mver${CMAKE_EXECUTABLE_SUFFIX}" --headless --quit-after-startup)
+
+if(WIN32)
+  find_program(DUMPBIN dumpbin REQUIRED)
+  foreach(exe mver mver-cli)
+    execute_process(COMMAND "${DUMPBIN}" /dependents "${ROOT}/bin/${exe}.exe"
+                    OUTPUT_VARIABLE deps COMMAND_ERROR_IS_FATAL ANY)
+    if(deps MATCHES "[.]conan2|[/\\\\](build|_build)[/\\\\]")
+      message(FATAL_ERROR "${exe} references a build/Conan path:\n${deps}")
+    endif()
+  endforeach()
+else()
+  foreach(exe mver mver-cli)
+    execute_process(COMMAND sh -c "LD_DEBUG=libs '$1' --help 2>&1 || true" sh "${ROOT}/bin/${exe}"
+                    OUTPUT_VARIABLE loaded)
+    if(loaded MATCHES "[.]conan2|[/](build|_build)[/]")
+      message(FATAL_ERROR "${exe} loaded a build/Conan library:\n${loaded}")
+    endif()
+    execute_process(COMMAND readelf -d "${ROOT}/bin/${exe}" OUTPUT_VARIABLE elf COMMAND_ERROR_IS_FATAL ANY)
+    if(elf MATCHES "RPATH.*(/home/|[.]conan2|/build/)")
+      message(FATAL_ERROR "${exe} has a non-relocatable RPATH:\n${elf}")
+    endif()
+  endforeach()
+endif()
+
