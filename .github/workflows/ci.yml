@@ -1,0 +1,46 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  package:
+    strategy:
+      matrix:
+        os: [windows-2022, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lukka/get-cmake@latest
+      - uses: conan-io/setup-conan@v1
+      - name: Install linux packaging tools
+        if: runner.os == 'Linux'
+        run: |
+          curl -L -o linuxdeploy.AppImage https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy.AppImage
+          echo "$PWD" >> "$GITHUB_PATH"
+          mv linuxdeploy.AppImage linuxdeploy
+      - name: Configure dependencies
+        run: conan install . --build=missing -s build_type=Release -of build
+      - name: Configure and build
+        run: cmake --preset conan-release && cmake --build --preset conan-release
+      - name: Create install tree
+        run: cmake --install build --prefix staging
+      - name: Create AppImage
+        if: runner.os == 'Linux'
+        run: cmake --build build --target appimage
+      - name: Archive clean install tree
+        shell: bash
+        run: cmake -E tar cf package.tar --format=gnutar staging
+      - name: Remove build and Conan cache
+        shell: bash
+        run: |
+          rm -rf build staging
+          conan remove '*' -c
+          mkdir unpacked && cmake -E tar xf package.tar --format=gnutar
+      - name: Packaging smoke check
+        run: cmake -DROOT=${{ github.workspace }}/unpacked/staging -P scripts/package-smoke.cmake
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mver-${{ runner.os }}
+          path: |
+            package.tar
+            *.AppImage
