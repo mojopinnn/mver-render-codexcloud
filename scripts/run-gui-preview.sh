@@ -29,12 +29,23 @@ cleanup() {
   jobs -pr | xargs -r kill 2>/dev/null || true
   rm -rf "${work}"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 Xvfb "${display}" -screen 0 1280x800x24 -nolisten tcp >"${work}/xvfb.log" 2>&1 &
+xvfb_pid=$!
 export DISPLAY="${display}"
-for _ in {1..50}; do xdpyinfo >/dev/null 2>&1 && break; sleep 0.1; done
-xdpyinfo >/dev/null 2>&1 || { cat "${work}/xvfb.log" >&2; exit 3; }
+x_socket="/tmp/.X11-unix/X${display_number}"
+for _ in {1..50}; do
+  [[ -S "${x_socket}" ]] && kill -0 "${xvfb_pid}" 2>/dev/null && break
+  kill -0 "${xvfb_pid}" 2>/dev/null || break
+  sleep 0.1
+done
+[[ -S "${x_socket}" ]] && kill -0 "${xvfb_pid}" 2>/dev/null || {
+  cat "${work}/xvfb.log" >&2
+  exit 3
+}
 
 "${binary}" "$@" >"${work}/mver.log" 2>&1 &
 x11vnc -display "${display}" -localhost -forever -shared -nopw \
@@ -42,5 +53,4 @@ x11vnc -display "${display}" -localhost -forever -shared -nopw \
 
 echo "mver GUI preview: http://127.0.0.1:${port}/vnc.html?autoconnect=1&resize=scale"
 echo "Use your sandbox/IDE port-forwarding UI to expose port ${port}."
-exec websockify --web "${novnc_web}" "0.0.0.0:${port}" localhost:5900
-
+websockify --web "${novnc_web}" "0.0.0.0:${port}" localhost:5900
