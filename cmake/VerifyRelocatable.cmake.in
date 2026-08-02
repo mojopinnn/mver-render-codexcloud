@@ -1,0 +1,16 @@
+# Fail installation if a generated executable encodes a build-machine path.
+set(_forbidden "@CMAKE_BINARY_DIR@" "$ENV{CONAN_HOME}" "$ENV{USERPROFILE}/.conan2" "$ENV{HOME}/.conan2")
+foreach(_name mver mver-cli)
+  set(_exe "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/@CMAKE_INSTALL_BINDIR@/${_name}@CMAKE_EXECUTABLE_SUFFIX@")
+  if(NOT EXISTS "${_exe}")
+    message(FATAL_ERROR "Missing installed executable: ${_exe}")
+  endif()
+  file(STRINGS "${_exe}" _strings LIMIT_COUNT 200000)
+  string(JOIN "\n" _content ${_strings})
+  foreach(_path IN LISTS _forbidden)
+    if(_path AND _content MATCHES "${_path}")
+      message(FATAL_ERROR "${_exe} contains forbidden build/cache path: ${_path}")
+    endif()
+  endforeach()
+endforeach()
+
