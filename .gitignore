@@ -1,0 +1,5 @@
+/build/
+/staging/
+/squashfs-root/
+/*.AppImage
+/*.tar

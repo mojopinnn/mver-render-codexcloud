@@ -1,0 +1,18 @@
+ocio_profile_version: 2
+search_path: ""
+strictparsing: true
+roles:
+  default: raw
+  scene_linear: raw
+  color_picking: raw
+file_rules:
+  - !<Rule> {name: Default, colorspace: raw}
+colorspaces:
+  - !<ColorSpace>
+    name: raw
+    family: Utility
+    equalitygroup: ""
+    bitdepth: 32f
+    isdata: true
+    allocation: uniform
+
